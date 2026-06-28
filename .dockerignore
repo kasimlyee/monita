@@ -1,0 +1,7 @@
+.git
+*.exe
+*.test
+*.prof
+*.out
+*.bench
+dist/
