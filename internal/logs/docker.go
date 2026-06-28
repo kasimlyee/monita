@@ -46,11 +46,28 @@ func NewDockerTailer(container, levelFilter, socketPath, offsetDir string, r *re
 	}
 }
 
+// Run blocks until ctx is cancelled, reconnecting to the Docker log stream
+// automatically after any stream end or transient error (daemon restart,
+// container stop/start, etc.).
 func (t *DockerTailer) Run(ctx context.Context, out chan<- Entry) error {
 	if err := os.MkdirAll(t.offsetDir, 0o700); err != nil {
 		return fmt.Errorf("create offset dir: %w", err)
 	}
+	for {
+		if err := t.stream(ctx, out); err != nil {
+			fmt.Fprintf(os.Stderr, "level=warn msg=\"docker tailer reconnecting\" container=%q err=%q\n", t.container, err)
+		}
+		select {
+		case <-ctx.Done():
+			return nil
+		case <-time.After(5 * time.Second):
+		}
+	}
+}
 
+// stream opens one Docker log connection and reads until the stream ends or ctx
+// is cancelled. A nil return means a clean end; the caller reconnects either way.
+func (t *DockerTailer) stream(ctx context.Context, out chan<- Entry) error {
 	since := t.loadSince()
 
 	client := &http.Client{
@@ -71,7 +88,7 @@ func (t *DockerTailer) Run(ctx context.Context, out chan<- Entry) error {
 
 	resp, err := client.Do(req)
 	if err != nil {
-		return fmt.Errorf("docker logs: %w", err)
+		return fmt.Errorf("docker logs connect: %w", err)
 	}
 	defer resp.Body.Close()
 
@@ -92,7 +109,7 @@ func (t *DockerTailer) Run(ctx context.Context, out chan<- Entry) error {
 
 		if _, err := io.ReadFull(br, hdr[:]); err != nil {
 			if err == io.EOF || err == io.ErrUnexpectedEOF {
-				return nil // stream ended
+				return nil // stream ended cleanly; caller will reconnect
 			}
 			return fmt.Errorf("read docker frame header: %w", err)
 		}

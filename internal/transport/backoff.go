@@ -8,9 +8,9 @@ type backoff struct {
 	base    time.Duration
 	current time.Duration
 	max     time.Duration
-	factor  time.Duration // multiplier applied on each failure
-	resetAt int           // consecutive successes required to reset
-	ok      int           // consecutive successes since last failure
+	factor  int // multiplier applied on each failure
+	resetAt int // consecutive successes required to reset
+	ok      int // consecutive successes since last failure
 }
 
 func newBackoff(base, max time.Duration) *backoff {
@@ -26,7 +26,7 @@ func newBackoff(base, max time.Duration) *backoff {
 // Fail doubles the current interval (capped at max) and returns the new value.
 func (b *backoff) Fail() time.Duration {
 	b.ok = 0
-	next := b.current * b.factor
+	next := b.current * time.Duration(b.factor)
 	if next > b.max || next <= 0 {
 		next = b.max
 	}

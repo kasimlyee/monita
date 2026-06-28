@@ -1,0 +1,43 @@
+version: "3.8"
+
+# Mount surface:
+#   - config file (read-only)
+#   - buffer volume (the only writable path the agent needs)
+#   - /var/run/docker.sock ONLY if log tailing from sibling containers is enabled;
+#     omit the socket mount entirely for metrics-only deployments.
+#
+# The agent runs as uid 1000 (non-root) with a read-only root filesystem.
+# Adjust the uid/gid to match your host's non-privileged user.
+
+services:
+  your-app:
+    image: your-app:latest
+    # ... your app config ...
+
+  monita-agent:
+    image: monita-agent:latest  
+    read_only: true
+    user: "1000:1000"
+    restart: unless-stopped
+    volumes:
+      # Config file — read-only; provisioned out of band with token + signing_key.
+      - type: bind
+        source: /etc/monita-agent/config.yaml
+        target: /etc/monita-agent/config.yaml
+        read_only: true
+
+      # Durable buffer — the only directory the agent writes to.
+      - type: volume
+        source: monita-buffer
+        target: /var/lib/monita-agent
+
+      # Docker socket — ONLY needed if docker_container log sources are configured.
+      # Remove this mount for metrics-only deployments.
+      - type: bind
+        source: /var/run/docker.sock
+        target: /var/run/docker.sock
+        read_only: true
+    command: ["/monita-agent", "--config", "/etc/monita-agent/config.yaml"]
+
+volumes:
+  monita-buffer:

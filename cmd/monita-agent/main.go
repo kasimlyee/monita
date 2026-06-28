@@ -20,7 +20,7 @@ import (
 )
 
 func main() {
-	configPath := flag.String("config", "/etc/bastion-agent/config.yaml", "path to config file")
+	configPath := flag.String("config", "/etc/monita-agent/config.yaml", "path to config file")
 	flag.Parse()
 
 	cfg, err := config.Load(*configPath)

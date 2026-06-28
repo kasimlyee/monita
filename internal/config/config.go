@@ -8,7 +8,7 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
-// Duration wraps time.Duration to support YAML unmarshaling from strings like "30s".
+// Duration wraps time.Duration to support YAML round-tripping from strings like "30s".
 type Duration struct{ time.Duration }
 
 func (d *Duration) UnmarshalYAML(v *yaml.Node) error {
@@ -18,6 +18,10 @@ func (d *Duration) UnmarshalYAML(v *yaml.Node) error {
 	}
 	d.Duration = dur
 	return nil
+}
+
+func (d Duration) MarshalYAML() (any, error) {
+	return d.Duration.String(), nil
 }
 
 type MetricsConfig struct {
@@ -44,8 +48,10 @@ type Config struct {
 	CollectorURL string `yaml:"collector_url"`
 	AgentID      string `yaml:"agent_id"`
 	Token        string `yaml:"token"`
-	SigningKey   string `yaml:"signing_key"`
+	SigningKey    string `yaml:"signing_key"`
 	CertPin      string `yaml:"cert_pin"`
+
+	path string // absolute path of the loaded file; used by UpdateCredentials
 
 	PushInterval Duration `yaml:"push_interval"`
 	MaxBatchSize int      `yaml:"max_batch_size"`
@@ -80,7 +86,32 @@ func Load(path string) (*Config, error) {
 	if err := cfg.validate(); err != nil {
 		return nil, fmt.Errorf("invalid config: %w", err)
 	}
+	cfg.path = path
 	return &cfg, nil
+}
+
+// UpdateCredentials replaces token and signing_key in the config file on disk.
+// It is called after a successful token rotation so the new credentials survive
+// an agent restart. The update is written via a temp-file rename (crash-safe).
+func (c *Config) UpdateCredentials(token, signingKey string) error {
+	c.Token = token
+	c.SigningKey = signingKey
+	if c.path == "" {
+		return fmt.Errorf("config path unknown; cannot persist rotated credentials")
+	}
+	data, err := yaml.Marshal(c)
+	if err != nil {
+		return fmt.Errorf("marshal config: %w", err)
+	}
+	tmp := c.path + ".tmp"
+	if err := os.WriteFile(tmp, data, 0o600); err != nil {
+		return fmt.Errorf("write config tmp: %w", err)
+	}
+	if err := os.Rename(tmp, c.path); err != nil {
+		os.Remove(tmp)
+		return fmt.Errorf("replace config file: %w", err)
+	}
+	return nil
 }
 
 func (c *Config) applyDefaults() {

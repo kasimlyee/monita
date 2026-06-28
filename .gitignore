@@ -4,8 +4,8 @@ PROTOCOL.md
 SPEC.md
 
 # build artifacts
-bastion-agent
-bastion-agent.exe
+monita-agent
+monita-agent.exe
 *.exe
 /dist/
 

@@ -177,7 +177,10 @@ func (t *FileTailer) openAt(offset int64) (*os.File, error) {
 	}
 	if offset > 0 {
 		if _, err := f.Seek(offset, io.SeekStart); err != nil {
-			f.Seek(0, io.SeekStart) //nolint:errcheck
+			if _, err := f.Seek(0, io.SeekStart); err != nil {
+				f.Close()
+				return nil, fmt.Errorf("seek to start of %s: %w", t.source, err)
+			}
 		}
 	}
 	return f, nil

@@ -179,8 +179,11 @@ func (c *Client) RotateToken(ctx context.Context) error {
 	c.signingKey = result.SigningKey
 	c.mu.Unlock()
 
-	fmt.Fprintf(os.Stderr, "level=info msg=\"token rotated\" expires_at=%d\n", result.ExpiresAt)
-	fmt.Fprintf(os.Stderr, "level=warn msg=\"update config.yaml token and signing_key with new values\"\n")
+	if err := c.cfg.UpdateCredentials(result.Token, result.SigningKey); err != nil {
+		fmt.Fprintf(os.Stderr, "level=error msg=\"token rotated in memory but config.yaml write failed — update manually\" err=%q expires_at=%d\n", err, result.ExpiresAt)
+	} else {
+		fmt.Fprintf(os.Stderr, "level=info msg=\"token rotated and config.yaml updated\" expires_at=%d\n", result.ExpiresAt)
+	}
 	return nil
 }
 
